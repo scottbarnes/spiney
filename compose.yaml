@@ -1,0 +1,11 @@
+version: '3.8'
+
+services:
+  discordbot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      - PYTHONUNBUFFERED=1
+      - BOT_API_KEY=${DISCORD_BOT_API_KEY}
+      - GOOGLE_MAPS_API_KEY=${GOOGLE_MAPS_API_KEY}
