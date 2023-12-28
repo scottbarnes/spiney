@@ -26,6 +26,8 @@ class Coords:
 
 
 class CoordsDB(Base):
+    """SQLAlchemy representation of Coords."""
+
     __tablename__ = "coords"
     id = Column(Integer, primary_key=True, autoincrement=True)
     address = Column(String, nullable=False)

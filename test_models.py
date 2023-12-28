@@ -1,15 +1,13 @@
-from typing import Final
+from typing import Final, Generator
 
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import Session, sessionmaker
 
 from models import Base, Coords, CoordsDB
 
-DB_URI: Final = "sqlite:///:memory:"
+import pytest
 
-test_engine = create_engine(DB_URI)
-Base.metadata.create_all(test_engine)
-TestSession = sessionmaker(bind=test_engine)
+DB_URI: Final = "sqlite:///:memory:"
 
 test_coords_google = Coords(
     address="1600 Amphitheatre Pkwy, Mountain View, CA 94043, USA",
@@ -34,18 +32,25 @@ test_coords_db_washington_dc = CoordsDB(
 )
 
 
-def test_insert_coords_db_item() -> None:
+@pytest.fixture()
+def get_db() -> Generator[Session, None, None]:
+    test_engine = create_engine(DB_URI)
+    Base.metadata.create_all(test_engine)
+    TestSession = sessionmaker(bind=test_engine)
+    yield TestSession()
+
+
+def test_insert_coords_db_item(get_db) -> None:
     """
     These tests are fairly pointless and mostly test functionality already
     tested by SQLAlchemy's own tests.
     """
-    session = TestSession()
+    session = get_db
     session.add(test_coords_db_google)
     session.add(test_coords_db_washington_dc)
     session.commit()
 
     all_items = session.query(CoordsDB).all()
-    print(vars(all_items[0]))
     assert all_items[0] == test_coords_db_google
     assert all_items[1] == test_coords_db_washington_dc
 
