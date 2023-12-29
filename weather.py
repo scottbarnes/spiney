@@ -40,26 +40,22 @@ async def get_coordinates_from_api(location: str) -> Coords | None:
                 raise ValueError(f"Got unexpected result from get_coordinates: {result}")
 
 
-async def get_location_data(address, db_session: Session) -> Coords | None:
+async def get_location_data(address: str, db_session: Session) -> Coords | None:
     """
-    TODO:
+    Turn an address into Coords, if geocoded coordinates can be found.
+
     1. Check database if entry exists; if it does, use it.
     2. If not, query API, update DB, then use that data.
     """
     # Get coordinates from DB if available.
-    query = select(CoordsDB).where(CoordsDB.query == address)
-    if coordinates := db_session.execute(query).scalar_one_or_none():
+    db_query = select(CoordsDB).where(CoordsDB.query == address)
+    if coordinates := db_session.execute(db_query).scalar_one_or_none():
         return coordinates.to_dataclass()
 
     # Get coordinates from API if necessary.
-    coordinates = await get_coordinates_from_api(address)
-    if not coordinates:
-        return None
+    if coordinates := await get_coordinates_from_api(address):
+        db_session.add(coordinates.to_sqlalchemy())
+        db_session.commit()
+        return coordinates
 
-    return coordinates
-
-
-# if __name__ == "__main__":
-#     address = "20001"
-#     location_data = asyncio.run(get_location_data(address))
-#     print(location_data)
+    return None

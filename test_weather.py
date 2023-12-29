@@ -1,5 +1,6 @@
 from typing import Final
 from unittest.mock import patch
+from sqlalchemy import select
 
 from sqlalchemy.orm import Session
 
@@ -89,13 +90,13 @@ coords_washington_dc = Coords(
     ],
     indirect=["mock_response"],
 )
-async def test_get_coordinates(location, mock_response, expected) -> None:
+async def test_get_coordinates(location: str, mock_response: dict, expected: Coords) -> None:
     """
     Test that a location maps to coordinates.
     """
     with patch("aiohttp.ClientSession.get", new=mock_response):
-        location = await get_coordinates_from_api(location)
-        assert location == expected
+        got = await get_coordinates_from_api(location)
+        assert got == expected
 
 
 @pytest.mark.asyncio
@@ -125,7 +126,9 @@ async def test_get_coordinates_error_handling(mock_response, exception) -> None:
         (location_washingon_dc, coords_washington_dc),
     ],
 )
-async def test_ensure_api_is_not_called_if_query_in_db(db_session: Session, query, expected) -> None:
+async def test_get_location_data_doesnt_call_api_when_coords_in_db(
+    db_session: Session, query: str, expected: Coords
+) -> None:
     """
     The logic is that `get_location_data` should first attempt to get location
     data from the database, and if that fails, it should hit the API, and then
@@ -138,13 +141,44 @@ async def test_ensure_api_is_not_called_if_query_in_db(db_session: Session, quer
     db_session.add(coords_washington_dc.to_sqlalchemy())
     db_session.commit()
 
-    # Need to:
-    # ensure database is checked.
-    # ensure API is called
-    # ensure DB is updated
-    # ensure data is returned
-
     with patch("weather.get_coordinates_from_api") as mock_get_coordinates:
         got = await get_location_data(address=query, db_session=db_session)
         assert got == expected
         mock_get_coordinates.assert_not_called()
+
+
+@pytest.mark.asyncio()
+@pytest.mark.parametrize(
+    ("query", "expected"),
+    [
+        (location_google, coords_google),
+        (location_washingon_dc, coords_washington_dc),
+    ],
+)
+async def test_get_location_data_updates_db_with_new_coordinates(
+    db_session: Session, query: str, expected: Coords
+) -> None:
+    """
+    When coordinates are pulled from the external geocoding API, the
+    coordinates should be written to the database.
+
+    This is just testing the business logic of `get_location_data`, hence the
+    mocked respose for `weather.get_coordinates_from_api()`, which is unit
+    tested elsewhere.
+    """
+    assert db_session.query(CoordsDB).count() == 0
+
+    async def mock_get_coordinates(_):
+        return expected
+
+    with patch("weather.get_coordinates_from_api", new=mock_get_coordinates):
+        # Verify over all result.
+        got = await get_location_data(address=query, db_session=db_session)
+        assert got == expected
+
+        # Verify item from API is added to the DB correctly.
+        assert db_session.query(CoordsDB).count() == 1
+        db_query = select(CoordsDB).where(CoordsDB.query == query)
+        got = db_session.execute(db_query).scalar_one_or_none()
+        assert got
+        assert got.to_dataclass() == expected
