@@ -2,6 +2,7 @@ import asyncio
 import os
 from typing import Final
 from urllib.parse import quote_plus
+from sqlalchemy import select
 
 from sqlalchemy.orm import Session
 
@@ -46,7 +47,8 @@ async def get_location_data(address, db_session: Session) -> Coords | None:
     2. If not, query API, update DB, then use that data.
     """
     # Get coordinates from DB if available.
-    if coordinates := db_session.query(CoordsDB).filter(CoordsDB.query == address).first():
+    query = select(CoordsDB).where(CoordsDB.query == address)
+    if coordinates := db_session.execute(query).scalar_one_or_none():
         return coordinates.to_dataclass()
 
     # Get coordinates from API if necessary.
