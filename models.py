@@ -1,10 +1,14 @@
 from dataclasses import dataclass
 from datetime import datetime, timezone
+import os
+from typing import Final
 
-from sqlalchemy import Column, String, Float, Integer, DateTime
-from sqlalchemy.orm import declarative_base
+from sqlalchemy import Column, String, Float, Integer, DateTime, create_engine
+from sqlalchemy.orm import Session, declarative_base, sessionmaker
 
 Base = declarative_base()
+
+DB_URI: Final = os.getenv("DB_URI", "")
 
 
 @dataclass
@@ -33,7 +37,7 @@ class CoordsDB(Base):
     address = Column(String, nullable=False)
     latitude = Column(Float, nullable=False)
     longitude = Column(Float, nullable=False)
-    query = Column(String, nullable=False, index=True)
+    query = Column(String, nullable=False, index=True, unique=True)
     created = Column(DateTime, default=datetime.now(timezone.utc))
     modified = Column(DateTime, default=datetime.now(timezone.utc), onupdate=datetime.now(timezone.utc))
 
@@ -50,3 +54,11 @@ class CoordsDB(Base):
 
     def __str__(self) -> str:
         return f"CoordsDB(id={self.id}, query={self.query}, latitude={self.latitude}, longitude={self.longitude})"
+
+
+def get_session() -> Session:
+    """Get a DB session."""
+    engine = create_engine(DB_URI)
+    Base.metadata.create_all(engine)
+    Session = sessionmaker(bind=engine)
+    return Session()

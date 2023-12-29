@@ -1,13 +1,15 @@
 from typing import Final
 from unittest.mock import patch
 
+from sqlalchemy.orm import Session
+
 import aiohttp
 import pytest
 
 from errors import InvalidAPIKeyError
 from models import Coords, CoordsDB
 from weather import get_coordinates_from_api, get_location_data
-from test_models import get_db
+from test_models import db_session, coords_google, coords_washington_dc
 
 
 @pytest.fixture
@@ -106,47 +108,43 @@ async def test_get_coordinates(location, mock_response, expected) -> None:
     indirect=["mock_response"],
 )
 async def test_get_coordinates_error_handling(mock_response, exception) -> None:
+    """
+    Handle when there's an invalid API key or an unknown error.
+    """
     TEST_LOCATION: Final = "1600 Amphitheatre Parkway, Mountain View, CA"
     with patch("aiohttp.ClientSession.get", new=mock_response):
         with pytest.raises(exception):
             await get_coordinates_from_api(TEST_LOCATION)
 
 
-# @pytest.mark.asyncio
-# @pytest.mark.parametrize(
-#     ("query", "expected"),
-#     [
-#         (location_google, coords_google),
-#         (location_washingon_dc, coords_washington_dc),
-#         ("blah blah xyz rubbish", None),
-#     ],
-# )
-# async def test_get_location_data_calls_external_api_if_necessary(get_db, aiohttp_session_mock, query, expected, monkeypatch) -> None:
-#     """
-#     The logic is that `get_location_data` should first attempt to get location
-#     data from the database, and if that fails, it should hit the API, and then
-#     store the information in the database (and return the data).
-#     """
-#     from aiohttp.test_utils import TestClient
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("query", "expected"),
+    [
+        (location_google, coords_google),
+        (location_washingon_dc, coords_washington_dc),
+    ],
+)
+async def test_ensure_api_is_not_called_if_query_in_db(db_session: Session, query, expected) -> None:
+    """
+    The logic is that `get_location_data` should first attempt to get location
+    data from the database, and if that fails, it should hit the API, and then
+    store the information in the database (and return the data).
+    """
+    # Ensure DB is empty.
+    assert db_session.query(CoordsDB).count() == 0
 
-#     db_session = get_db
-#     # setup_mock_api_response(aiohttp_session_mock, mock_api_response_google)
+    db_session.add(coords_google.to_sqlalchemy())
+    db_session.add(coords_washington_dc.to_sqlalchemy())
+    db_session.commit()
 
-#     # api_session = AsyncMock()
-#     # api_session.get = AsyncMock()
+    # Need to:
+    # ensure database is checked.
+    # ensure API is called
+    # ensure DB is updated
+    # ensure data is returned
 
-#     # monkeypatch.setattr(aiohttp, "ClientSession", lambda: api_session)
-#     # Need to:
-#     # ensure database is checked.
-#     # ensure API is called
-#     # ensure DB is updated
-#     # ensure data is returned
-
-#     with aioresponses() as mocked_api_session:
-#         # mocked_api_session.get
-#         mocked_api_session.get("http://httpbin.org/get", status=200, body='{"test": true}')
-
-#         # Ensure database is new.
-#         assert len(db_session.query(CoordsDB).all()) == 0
-#         got = await get_location_data(query)
-#         assert got == expected
+    with patch("weather.get_coordinates_from_api") as mock_get_coordinates:
+        got = await get_location_data(address=query, db_session=db_session)
+        assert got == expected
+        mock_get_coordinates.assert_not_called()
