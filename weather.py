@@ -8,10 +8,11 @@ from sqlalchemy.orm import Session
 
 import aiohttp
 
-from errors import InvalidAPIKeyError
+from errors import InvalidAPIKeyError, APISyntaxError
 from models import Coords, CoordsDB, CurrentWeather
 
 GOOGLE_MAPS_API_KEY: Final = os.getenv("GOOGLE_MAPS_API_KEY", "")
+OPENWEATHER_API_KEY: Final = os.getenv("OPENWEATHER_API_KEY", "")
 
 
 async def get_coordinates_from_api(location: str) -> Coords | None:
@@ -20,7 +21,9 @@ async def get_coordinates_from_api(location: str) -> Coords | None:
     this can be an address, a name (e.g. "Mount Whitney"), a zip code, etc.
     """
     url_encoded_location = quote_plus(location)
-    url = f"https://maps.googleapis.com/maps/api/geocode/json?address={url_encoded_location}&key={GOOGLE_MAPS_API_KEY}"
+    url = f"https://maps.googleapis.com/maps/api/geocode/"
+    f"json?address={url_encoded_location}&key={GOOGLE_MAPS_API_KEY}"
+
     async with aiohttp.ClientSession() as session:
         response = await session.get(url)
         result = await response.json()
@@ -37,7 +40,7 @@ async def get_coordinates_from_api(location: str) -> Coords | None:
                     address=address, query=location, latitude=coordinates["lat"], longitude=coordinates["lng"]
                 )
             case _:
-                raise ValueError(f"Got unexpected result from get_coordinates: {result}")
+                raise ValueError(f"Got unexpected result from get_coordinates_from_api(): {result}")
 
 
 async def get_location_data(address: str, db_session: Session) -> Coords | None:
@@ -61,10 +64,26 @@ async def get_location_data(address: str, db_session: Session) -> Coords | None:
     return None
 
 
-async def get_current_weather(latitude: str, longitude: str) -> CurrentWeather:
+async def get_current_weather_from_owm(latitude: float, longitude: float) -> CurrentWeather:
     """
-    TODO: write doc string
+    Fetch weather from the OpenWeatherMap API and return the CurrentWeather.
     1. get weather from API with async aiohttp.ClientSession()
     2. call the static method on CurrentWeather() to get class object to return.
     """
-    pass
+    url = f"https://api.openweathermap.org/data/2.5/"
+    f"weather?lat={latitude}&lon={longitude}&units=metric&appid=${OPENWEATHER_API_KEY}"
+
+    async with aiohttp.ClientSession() as session:
+        response = await session.get(url)
+        result = await response.json()
+
+        match result:
+            case {"cod": "401", "message": message}:
+                raise InvalidAPIKeyError(message=message)
+            case {"cod": "400", "message": message}:
+                raise APISyntaxError(message=message)
+            # Note a 200 response is an `int` rather than a `str`, as with the others.
+            case {"cod": 200}:
+                return CurrentWeather.create_from_owm_json(result)
+            case _:
+                raise ValueError(f"Got unexpected result from get_current_weather_from_owm(): {result}")

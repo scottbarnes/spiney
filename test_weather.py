@@ -7,10 +7,17 @@ from sqlalchemy.orm import Session
 import aiohttp
 import pytest
 
-from errors import InvalidAPIKeyError
+from errors import APISyntaxError, InvalidAPIKeyError
 from models import Coords, CoordsDB
-from weather import get_coordinates_from_api, get_location_data
+from weather import get_coordinates_from_api, get_current_weather_from_owm, get_location_data
 from test_models import db_session, coords_google, coords_washington_dc
+
+from test_json_data import (
+    currentweather_expected_complete,
+    currentweather_expected_minimal,
+    owm_json_data_complete,
+    owm_json_data_minimal,
+)
 
 
 @pytest.fixture
@@ -31,11 +38,6 @@ def mock_response(request):
         return MockResponse()
 
     return mock_get
-
-
-def setup_mock_api_response(aiohttp_session_mock, response_data):
-    """Helper function to set up mock response."""
-    aiohttp_session_mock.get.return_value.__aenter__.return_value.json.return_value = response_data
 
 
 location_google = "1600 Amphitheatre Parkway, Mountain View, CA"
@@ -182,3 +184,56 @@ async def test_get_location_data_updates_db_with_new_coordinates(
         got = db_session.execute(db_query).scalar_one_or_none()
         assert got
         assert got.to_dataclass() == expected
+
+
+@pytest.mark.asyncio()
+@pytest.mark.parametrize(
+    ("latitude", "longitude", "mock_response", "validation_dict"),
+    [
+        (37.4224, -122.0842, owm_json_data_complete, currentweather_expected_complete),
+        (37.4224, -122.0842, owm_json_data_minimal, currentweather_expected_minimal),
+    ],
+    indirect=["mock_response"],
+)
+async def test_get_current_weather_from_owm(
+    latitude: float, longitude: float, mock_response: dict, validation_dict: dict
+) -> None:
+    """
+    Given a mock API response from OpenWeatherMap, ensure we get the correct
+    `CurrentWeather` object. Note: this is largely tested by `TestWeather` in
+    `test_models.py`, as this function does little more than call an API and
+    pass the JSON to `CurrentWeather.create_from_owm_json()`.
+    """
+
+    with patch("aiohttp.ClientSession.get", new=mock_response):
+        model = await get_current_weather_from_owm(latitude=latitude, longitude=longitude)
+        for attr, expected_value in validation_dict.items():
+            assert (
+                getattr(model, attr) == expected_value
+            ), f"For key {attr}: found {getattr(model, attr)} but expected {expected_value}"
+
+
+@pytest.mark.asyncio()
+@pytest.mark.parametrize(
+    ("latitude", "longitude", "mock_response", "error"),
+    [
+        (9999.9999, -122.0842, {"cod": "400", "message": "wrong latitude"}, APISyntaxError),
+        (37.4224, 9999.9999, {"cod": "400", "message": "wrong longitude"}, APISyntaxError),
+        (
+            37.4224,
+            -122.0842,
+            {
+                "cod": "401",
+                "message": "Invalid API key. Please see https://openweathermap.org/faq#error401 for more info.",
+            },
+            InvalidAPIKeyError,
+        ),
+        (37.4224, -122.0842, {"cod": "999", "message": "Rubbish response"}, ValueError),
+    ],
+    indirect=["mock_response"],
+)
+async def test_get_current_weather_from_owm_errors(latitude: float, longitude: float, mock_response: dict, error):
+    """Ensure get_current_weather_from_owm() raises the correct errors."""
+    with patch("aiohttp.ClientSession.get", new=mock_response):
+        with pytest.raises(error):
+            await get_current_weather_from_owm(longitude, latitude)
