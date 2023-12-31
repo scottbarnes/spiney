@@ -1,4 +1,5 @@
 icecream
 discord.py==2.3.2
+lxml==5.0.0
 pydantic==2.5.3
 sqlalchemy==2.0.23

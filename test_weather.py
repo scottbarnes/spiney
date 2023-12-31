@@ -1,23 +1,21 @@
 from typing import Final
 from unittest.mock import patch
-from sqlalchemy import select
-
-from sqlalchemy.orm import Session
 
 import aiohttp
 import pytest
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 
 from errors import APISyntaxError, InvalidAPIKeyError
 from models import Coords, CoordsDB
-from weather import get_coordinates_from_api, get_current_weather_from_owm, get_location_data
-from test_models import db_session, coords_google, coords_washington_dc
-
 from test_json_data import (
     currentweather_expected_complete,
     currentweather_expected_minimal,
     owm_json_data_complete,
     owm_json_data_minimal,
 )
+from test_models import coords_google, coords_washington_dc, db_session
+from weather import get_coordinates_from_api, get_current_weather_from_owm, get_location_data
 
 
 @pytest.fixture

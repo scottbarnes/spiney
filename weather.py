@@ -2,13 +2,12 @@ import asyncio
 import os
 from typing import Final
 from urllib.parse import quote_plus
-from sqlalchemy import func, select
-
-from sqlalchemy.orm import Session
 
 import aiohttp
+from sqlalchemy import func, select
+from sqlalchemy.orm import Session
 
-from errors import InvalidAPIKeyError, APISyntaxError
+from errors import APISyntaxError, InvalidAPIKeyError
 from models import Coords, CoordsDB, CurrentWeather
 
 GOOGLE_MAPS_API_KEY: Final = os.getenv("GOOGLE_MAPS_API_KEY", "")

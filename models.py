@@ -1,18 +1,30 @@
-from dataclasses import dataclass
-from datetime import datetime, timezone, timedelta
 import os
+from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Final
 
-from sqlalchemy import Column, String, Float, Integer, DateTime, create_engine
-from sqlalchemy.orm import Session, declarative_base, sessionmaker
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel
+from sqlalchemy import Column, DateTime, Float, ForeignKey, Integer, String, create_engine
+from sqlalchemy.orm import Session, declarative_base, relationship, sessionmaker
 
 Base = declarative_base()
 
 DB_URI: Final = os.getenv("DB_URI", "")
 
+##################
+# Helper functions
+##################
 
-@dataclass
+
+def get_db_session() -> Session:
+    """Get a DB session."""
+    engine = create_engine(DB_URI)
+    Base.metadata.create_all(engine)
+    Session = sessionmaker(bind=engine)
+    return Session()
+
+
+@dataclass(slots=True)
 class Coords:
     """Represents latitude and longitude coordinates."""
 
@@ -30,10 +42,28 @@ class Coords:
         )
 
 
+##########
+# Database
+##########
+
+
+class User(Base):
+    """SQLAlchemy representation of a user."""
+
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    discord_id = Column(Integer, unique=True)
+    name = Column(String, nullable=False)
+
+    urls = relationship("Url", back_populates="user")
+
+
 class CoordsDB(Base):
     """SQLAlchemy representation of Coords."""
 
     __tablename__ = "coords"
+
     id = Column(Integer, primary_key=True, autoincrement=True)
     address = Column(String, nullable=False)
     latitude = Column(Float, nullable=False)
@@ -57,12 +87,26 @@ class CoordsDB(Base):
         return f"CoordsDB(id={self.id}, query={self.query}, latitude={self.latitude}, longitude={self.longitude})"
 
 
-def get_db_session() -> Session:
-    """Get a DB session."""
-    engine = create_engine(DB_URI)
-    Base.metadata.create_all(engine)
-    Session = sessionmaker(bind=engine)
-    return Session()
+class Url(Base):
+    """SQLAlchemy representation of the A URL"""
+
+    __tablename__ = "urls"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    created = Column(DateTime, default=datetime.now(timezone.utc))
+    url = Column(String, nullable=False)
+    title = Column(String)
+
+    user = relationship("User", back_populates="urls")
+
+    def __str__(self):
+        return f"Url(id={self.id}, mentioned='{self.mentioned}', nick='{self.nick}', url='{self.url}', title='{self.title}')"
+
+
+#########
+# Weather
+#########
 
 
 class CurrentWeather(BaseModel):
@@ -221,3 +265,14 @@ class CurrentWeather(BaseModel):
         report = ", ".join(element for element in elements if element)
 
         return report
+
+
+############
+# URL parser
+############
+
+
+@dataclass(slots=True)
+class UrlTitle:
+    url: str
+    title: str

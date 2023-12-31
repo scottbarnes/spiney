@@ -1,11 +1,11 @@
-from datetime import datetime, timezone
 from typing import Final, Generator
 
+import pytest
 from pydantic_core import ValidationError
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
-from models import Base, Coords, CoordsDB, CurrentWeather
+from models import Base, Coords, CoordsDB, CurrentWeather, Url, User
 from test_json_data import (
     currentweather_expected_complete,
     currentweather_expected_minimal,
@@ -14,8 +14,6 @@ from test_json_data import (
     owm_json_data_minimal,
     owm_json_utc_location,
 )
-
-import pytest
 
 DB_URI: Final = "sqlite:///:memory:"
 
@@ -44,7 +42,7 @@ def db_session() -> Generator[Session, None, None]:
     db_session.close()
 
 
-def test_insert_coords_db_item(db_session) -> None:
+def test_insert_coords_db_item(db_session: Session) -> None:
     """
     These tests are fairly pointless and mostly test functionality already
     tested by SQLAlchemy's own tests.
@@ -61,7 +59,7 @@ def test_insert_coords_db_item(db_session) -> None:
     assert all_items[1] == location_washington_dc
 
 
-def test_covert_from_coords_db_to_coords(db_session) -> None:
+def test_covert_from_coords_db_to_coords(db_session: Session) -> None:
     """
     The `CoordsDB` objects have a `.to_dataclass()` method to dump the instance
     to a `Coords` dataclass.
@@ -104,3 +102,62 @@ class TestCurrentWeather:
         with pytest.raises(ValidationError):
             json_data = {}
             CurrentWeather.create_from_owm_json(json_data)
+
+
+#######################################
+# General database models and relations
+#######################################
+
+
+@pytest.mark.asyncio()
+async def test_user_instantiation(db_session: Session):
+    """Ensure a user can be created."""
+    user = User(name="12345")
+    db_session.add(user)
+    db_session.commit()
+    assert user.id is not None
+
+
+@pytest.mark.asyncio()
+async def test_user_names_are_unique(db_session: Session):
+    """
+    The `name` field is unique because it represents one IRC nick or one
+    Discord user ID.
+    """
+    user = User(name="123")
+    db_session.add(user)
+    db_session.commit()
+    new_user = User(name="456")
+    db_session.add(user)
+    db_session.add(new_user)
+    db_session.commit()
+    assert db_session.query(User).count() == 2
+
+
+@pytest.mark.asyncio()
+async def test_url_instantiation(db_session: Session):
+    """Ensure a Url can be created."""
+    user = User(name="123")
+    url = Url(user=user, url="https://example.com")
+    db_session.add(url)
+    db_session.commit()
+    assert url.id is not None
+
+
+@pytest.mark.asyncio()
+async def test_url_user_relationship(db_session: Session):
+    """Test the relationship between User and Url."""
+    user = User(name="123")
+    url = Url(user=user, url="https://example.com")
+    db_session.add(user)
+    db_session.add(url)
+    db_session.commit()
+
+    retrieved_user = db_session.query(User).first()
+    assert retrieved_user is not None
+    assert len(retrieved_user.urls) == 1
+    assert retrieved_user.urls[0].url == "https://example.com"
+
+    retrieved_url = db_session.query(Url).first()
+    assert retrieved_url is not None
+    assert retrieved_url.user.name == "123"
