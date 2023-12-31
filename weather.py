@@ -2,7 +2,7 @@ import asyncio
 import os
 from typing import Final
 from urllib.parse import quote_plus
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from sqlalchemy.orm import Session
 
@@ -21,8 +21,7 @@ async def get_coordinates_from_api(location: str) -> Coords | None:
     this can be an address, a name (e.g. "Mount Whitney"), a zip code, etc.
     """
     url_encoded_location = quote_plus(location)
-    url = f"https://maps.googleapis.com/maps/api/geocode/"
-    f"json?address={url_encoded_location}&key={GOOGLE_MAPS_API_KEY}"
+    url = f"https://maps.googleapis.com/maps/api/geocode/json?address={url_encoded_location}&key={GOOGLE_MAPS_API_KEY}"
 
     async with aiohttp.ClientSession() as session:
         response = await session.get(url)
@@ -51,7 +50,7 @@ async def get_location_data(address: str, db_session: Session) -> Coords | None:
     2. If not, query API, update DB, then use that data.
     """
     # Get coordinates from DB if available.
-    db_query = select(CoordsDB).where(CoordsDB.query == address)
+    db_query = select(CoordsDB).where(func.lower(CoordsDB.query) == func.lower(address))
     if coordinates := db_session.execute(db_query).scalar_one_or_none():
         return coordinates.to_dataclass()
 
@@ -70,8 +69,7 @@ async def get_current_weather_from_owm(latitude: float, longitude: float) -> Cur
     1. get weather from API with async aiohttp.ClientSession()
     2. call the static method on CurrentWeather() to get class object to return.
     """
-    url = f"https://api.openweathermap.org/data/2.5/"
-    f"weather?lat={latitude}&lon={longitude}&units=metric&appid=${OPENWEATHER_API_KEY}"
+    url = f"https://api.openweathermap.org/data/2.5/weather?lat={latitude}&lon={longitude}&units=metric&appid={OPENWEATHER_API_KEY}"
 
     async with aiohttp.ClientSession() as session:
         response = await session.get(url)

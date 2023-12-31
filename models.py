@@ -57,7 +57,7 @@ class CoordsDB(Base):
         return f"CoordsDB(id={self.id}, query={self.query}, latitude={self.latitude}, longitude={self.longitude})"
 
 
-def get_session() -> Session:
+def get_db_session() -> Session:
     """Get a DB session."""
     engine = create_engine(DB_URI)
     Base.metadata.create_all(engine)
@@ -111,8 +111,8 @@ class CurrentWeather(BaseModel):
         result["name"] = json_data.get("name")
         result["temperature"] = main_data.get("temp")
         result["last_updated"] = (
-            cls.get_datetime_from_timestamp(timestamp=json_data.get("dt"))
-            if (json_data.get("dt") and json_data.get("timezone"))
+            cls.get_datetime_from_timestamp(timestamp=json_data.get("dt") + json_data.get("timezone"))
+            if (json_data.get("dt"))
             else None
         )
         result["conditions"] = weather_data.get("description")
@@ -128,13 +128,13 @@ class CurrentWeather(BaseModel):
         result["rain_last_hour"] = rain_data.get("1h")
         result["snow_last_hour"] = snow_data.get("1h")
         result["sunrise"] = (
-            cls.get_datetime_from_timestamp(sys_data.get("sunrise"))
-            if sys_data.get("sunrise") and json_data.get("timezone")
+            cls.get_datetime_from_timestamp(sys_data.get("sunrise") + json_data.get("timezone"))
+            if sys_data.get("sunrise")
             else None
         )
         result["sunset"] = (
-            cls.get_datetime_from_timestamp(sys_data.get("sunset"))
-            if sys_data.get("sunset") and json_data.get("timezone")
+            cls.get_datetime_from_timestamp(sys_data.get("sunset") + json_data.get("timezone"))
+            if sys_data.get("sunset")
             else None
         )
         result["country"] = sys_data.get("country")
@@ -144,10 +144,7 @@ class CurrentWeather(BaseModel):
     @classmethod
     def get_datetime_from_timestamp(cls, timestamp: int) -> datetime:
         """
-        Covert a UTC timestamp, along with its timezone offset (in seconds), to
-        a datetime that reflects the local time.
-        E.g., "1703967963" (2023-12-30 at 20:26:03) with offset -28800 (-8 hours)
-        becomes atetime(2023, 12, 30, 12, 26, 3).
+        Covert a UTC timestamp (e.g. `1703999757` to a `datetime`.
         """
         return datetime.fromtimestamp(timestamp)
 
@@ -179,3 +176,48 @@ class CurrentWeather(BaseModel):
         ]
         dir_index = round(degrees / (360 / len(directions)))
         return directions[dir_index]
+
+    def format_weather_report(self):
+        """
+        Create a formatted weather report.
+        """
+
+        def format_datetime(dt):
+            return dt.strftime("%H:%M") if dt else ""
+
+        def celsius_to_fahrenheit(c):
+            return c * 9.0 / 5.0 + 32 if c is not None else None
+
+        def kph_to_mph(kph):
+            return kph * 0.621371 if kph is not None else None
+
+        def meters_to_miles(meters):
+            return meters * 0.000621371 if meters is not None else None
+
+        elements = [
+            f"Current weather for {self.name}, {self.country or 'Unknown'}",
+            f"(Last Update: {self.last_updated.strftime('%a %b %d %H:%M:%S')})" if self.last_updated else "",
+            f"Conditions: {self.conditions}" if self.conditions else "",
+            f"Temperature: {self.temperature:.1f}°C ({celsius_to_fahrenheit(self.temperature):.1f}°F)"
+            if self.temperature
+            else "",
+            f"Feels Like: {self.feels_like:.1f}°C ({celsius_to_fahrenheit(self.feels_like):.1f}°F)"
+            if self.feels_like
+            else "",
+            f"Wind: {self.wind_speed}kph ({kph_to_mph(self.wind_speed):.1f}mph)" if self.wind_speed else "",
+            f"Direction: {self.wind_direction}" if self.wind_direction else "",
+            f"Humidity: {self.humidity}%" if self.humidity else "",
+            f"Pressure: {self.pressure}hPa" if self.pressure else "",
+            f"Visibility: {self.visibility} meters ({meters_to_miles(self.visibility):.2f} miles)"
+            if self.visibility
+            else "",
+            f"Clouds: {self.clouds}%" if self.clouds else "",
+            f"Rain Last Hour: {self.rain_last_hour} mm" if self.rain_last_hour else "",
+            f"Snow Last Hour: {self.snow_last_hour} mm" if self.snow_last_hour else "",
+            f"Sunrise: {format_datetime(self.sunrise)}" if self.sunrise else "",
+            f"Sunset: {format_datetime(self.sunset)}" if self.sunset else "",
+        ]
+
+        report = ", ".join(element for element in elements if element)
+
+        return report

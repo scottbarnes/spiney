@@ -1,4 +1,5 @@
 import os
+from commands import get_current_weather
 
 import discord
 
@@ -23,6 +24,11 @@ async def on_message(message):
     if message.content.startswith("$hello"):
         print(f"message: {message}")
         await message.channel.send("Hello!")
+
+    # Current weather
+    if message.content.startswith(".wz"):
+        current_weather = await get_current_weather(message.content[1:])
+        await message.channel.send(current_weather)
 
 
 if __name__ == "__main__":

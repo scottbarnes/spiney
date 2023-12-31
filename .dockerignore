@@ -87,5 +87,11 @@ venv/
 # Vim swap files
 **/*.swp
 
+# Vim session files
+Session.vim
+
 # VS Code
 .vscode/
+
+# Our own data that's volume mounted inside later.
+data/

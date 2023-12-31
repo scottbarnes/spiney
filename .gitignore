@@ -161,3 +161,6 @@ cython_debug/
 
 # Vim sessions
 Session.vim
+
+# This app's data directory
+data/

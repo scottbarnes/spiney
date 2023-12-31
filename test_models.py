@@ -9,8 +9,10 @@ from models import Base, Coords, CoordsDB, CurrentWeather
 from test_json_data import (
     currentweather_expected_complete,
     currentweather_expected_minimal,
+    currentweather_expected_utc_location,
     owm_json_data_complete,
     owm_json_data_minimal,
+    owm_json_utc_location,
 )
 
 import pytest
@@ -78,6 +80,7 @@ class TestCurrentWeather:
         [
             (owm_json_data_complete, currentweather_expected_complete),
             (owm_json_data_minimal, currentweather_expected_minimal),
+            (owm_json_utc_location, currentweather_expected_utc_location),
         ],
     )
     async def test_currentweather_attributes(self, json_data: dict, expected: dict) -> None:
