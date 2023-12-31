@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 import aiohttp
 
 from errors import InvalidAPIKeyError
-from models import Coords, CoordsDB
+from models import Coords, CoordsDB, CurrentWeather
 
 GOOGLE_MAPS_API_KEY: Final = os.getenv("GOOGLE_MAPS_API_KEY", "")
 
@@ -59,3 +59,12 @@ async def get_location_data(address: str, db_session: Session) -> Coords | None:
         return coordinates
 
     return None
+
+
+async def get_current_weather(latitude: str, longitude: str) -> CurrentWeather:
+    """
+    TODO: write doc string
+    1. get weather from API with async aiohttp.ClientSession()
+    2. call the static method on CurrentWeather() to get class object to return.
+    """
+    pass
