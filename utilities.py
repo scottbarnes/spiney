@@ -1,3 +1,4 @@
+from discord.ext.commands import MemberConverter
 from sqlalchemy.orm import Session
 
 from models import User
@@ -19,3 +20,13 @@ def get_or_create_user(db_session: Session, name: str, discord_id: int | None = 
         db_session.commit()
 
     return user
+
+
+async def get_user_from_mention(ctx, mention):
+    try:
+        converter = MemberConverter()
+        user = await converter.convert(ctx, mention)
+        return user
+    except Exception as e:
+        await ctx.send(f"Error: {e}")
+        return None

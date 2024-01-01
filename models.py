@@ -101,7 +101,7 @@ class Url(Base):
     user = relationship("User", back_populates="urls")
 
     def __str__(self):
-        return f"Url(id={self.id}, mentioned='{self.mentioned}', nick='{self.nick}', url='{self.url}', title='{self.title}')"
+        return f"Url(id={self.id}, user='{self.user}', url='{self.url}', title='{self.title}')"
 
 
 #########

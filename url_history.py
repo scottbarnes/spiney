@@ -1,9 +1,10 @@
 import re
 from datetime import datetime, timezone
-from typing import Final
+from typing import Final, Sequence
 
 import aiohttp
 from lxml import etree
+from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
 
 from utilities import get_or_create_user
@@ -18,11 +19,12 @@ STRPTIME_FORMAT: Final = "%Y-%m-%d %H:%M:%S"
 
 from discord.member import Member
 
-from models import Url, UrlTitle
+from models import Url, UrlTitle, User
 
 #############
 # URL parsing
 #############
+
 
 async def get_urls_from_line(line: str) -> list[str]:
     """
@@ -68,3 +70,23 @@ async def add_urls_to_db(db_session: Session, author: Member, urls: list[UrlTitl
         db_session.add(url)
 
     db_session.commit()
+
+
+async def url_search(db_session: Session, term: str, user_id: int | None = None, limit: int = 10) -> Sequence[Url]:
+    """
+    Construct a query based on the function parameters and return the matching `Url`s.
+    """
+    db_query = select(Url).order_by(desc(Url.created)).limit(limit)
+
+    if user_id and term:
+        db_query = (
+            select(Url).where(Url.url.like(f"%{term}%")).join(User).where(User.discord_id == user_id).limit(limit)
+        )
+    elif user_id:
+        db_query = select(Url).join(User).where(User.discord_id == user_id).limit(limit)
+
+    elif term:
+        db_query = select(Url).where(Url.url.like(f"%{term}%")).limit(limit)
+
+    if url_matches := db_session.execute(db_query).scalars().all():
+        return url_matches
