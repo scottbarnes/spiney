@@ -55,6 +55,7 @@ class User(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     discord_id = Column(Integer, unique=True)
     name = Column(String, nullable=False)
+    weather_location = Column(String, nullable=True)
 
     urls = relationship("Url", back_populates="user")
 
