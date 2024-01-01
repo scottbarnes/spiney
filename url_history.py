@@ -72,10 +72,15 @@ async def add_urls_to_db(db_session: Session, author: Member, urls: list[UrlTitl
     db_session.commit()
 
 
-async def url_search(db_session: Session, term: str, user_id: int | None = None, limit: int = 10) -> Sequence[Url]:
+async def url_search(
+    db_session: Session, term: str = "", user_id: int | None = None, limit: int = 10
+) -> Sequence[Url] | None:
     """
     Construct a query based on the function parameters and return the matching `Url`s.
     """
+    # argparse will pass `limit=None` if not specified and we want to override this.
+    limit = 10 if limit is None else limit
+
     db_query = select(Url).order_by(desc(Url.created)).limit(limit)
 
     if user_id and term:
