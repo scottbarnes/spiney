@@ -164,3 +164,6 @@ Session.vim
 
 # This app's data directory
 data/
+
+# Adminer files
+login-password-less.php
