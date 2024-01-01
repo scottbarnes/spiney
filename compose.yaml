@@ -1,7 +1,8 @@
-version: '3.8'
+version: '3.9'
 
 services:
   discordbot:
+    restart: unless-stopped
     build:
       context: .
       dockerfile: Dockerfile
@@ -12,3 +13,26 @@ services:
       - .env
     volumes:
       - ./data:/app/data
+
+  adminer:
+    image: adminer
+    restart: unless-stopped
+    networks:
+      - t2_proxy
+    environment:
+      ADMINER_DESIGN: dracula
+    volumes:
+      - "./login-password-less.php:/var/www/html/plugins-enabled/login-password-less.php"
+      - "./data:/data"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.backlink-rtr.tls=true"
+      - "traefik.http.routers.backlink-rtr.entrypoints=https"
+      - "traefik.http.routers.backlink-rtr.rule=Host(`spineydb.hope.fishcracker.net`)"
+      - "traefik.http.routers.backlink-rtr.service=backlink-svc"
+      - "traefik.http.services.backlink-svc.loadbalancer.server.port=8080"
+
+networks:
+  t2_proxy:
+    external:
+      name: t2_proxy
