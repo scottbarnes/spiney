@@ -63,7 +63,9 @@ async def on_message(message):
         if not urls:
             return None
 
-        formatted_urls = [f"{url.url} ({url.title})\n" for url in urls]
+        # < > around links disables auto-embedding.
+        # https://support.discord.com/hc/en-us/articles/206342858--How-do-I-disable-auto-embed-
+        formatted_urls = [f"<{url.url}> ({url.title})\n" for url in urls]
         if formatted_urls:
             await message.channel.send("".join(url for url in formatted_urls))
 
