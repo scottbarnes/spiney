@@ -161,3 +161,13 @@ async def test_url_user_relationship(db_session: Session):
     retrieved_url = db_session.query(Url).first()
     assert retrieved_url is not None
     assert retrieved_url.user.name == "123"
+
+
+@pytest.mark.asyncio
+async def test_set_user_weather_location(db_session: Session) -> None:
+    """Ensure users can set `User.weather_location` with `wz -d location`."""
+    user = User(name="Test User", discord_id=1)
+    assert user.weather_location is None
+    user.set_weather_location("20001")
+    db_session.commit()
+    assert user.weather_location is "20001"

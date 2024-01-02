@@ -1,14 +1,15 @@
-import asyncio
 import os
 from typing import Final
 from urllib.parse import quote_plus
 
 import aiohttp
+from discord.message import Message
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from errors import APISyntaxError, InvalidAPIKeyError
-from models import Coords, CoordsDB, CurrentWeather
+from models import Coords, CoordsDB, CurrentWeather, CustomMessage, WeatherResponse
+from utilities import get_or_create_user, get_user
 
 GOOGLE_MAPS_API_KEY: Final = os.getenv("GOOGLE_MAPS_API_KEY", "")
 OPENWEATHER_API_KEY: Final = os.getenv("OPENWEATHER_API_KEY", "")
@@ -84,3 +85,94 @@ async def get_current_weather_from_owm(latitude: float, longitude: float) -> Cur
                 return CurrentWeather.create_from_owm_json(result)
             case _:
                 raise ValueError(f"Got unexpected result from get_current_weather_from_owm(): {result}")
+
+
+async def get_current_weather(db_session: Session, location: str) -> str:
+    """
+    Geocode `location` to GPS coordinates and return a report of the current weather.
+    """
+    if not (coordinates := await get_location_data(address=location, db_session=db_session)):
+        return f"Could not geocode input: {location}"
+
+    current_weather = await get_current_weather_from_owm(coordinates.latitude, coordinates.longitude)
+    return current_weather.format_weather_report()
+
+
+async def handle_users_default_location(db_session: Session, message: Message) -> WeatherResponse:
+    """
+    Handle the response when a user requests their default weather location.
+
+    If there `user` has `weather_location` set, then `status` will be `success` and
+    a `location` is returned, but if not, `status` is `error`.
+
+    The caller determines what to do based on the `status`.
+    """
+    user = get_or_create_user(db_session=db_session, name=message.author.name, discord_id=message.author.id)
+    if user.weather_location is None:
+        error_message = f"No location set. Set with `{message.weather_prefix} -d location`"
+        return WeatherResponse(status="error", message=error_message, location="")
+    else:
+        return WeatherResponse(status="success", message="", location=str(user.weather_location))
+
+
+async def handle_user_sets_default_location(db_session: Session, message) -> WeatherResponse:
+    """
+    Handle when a user sets a default location.
+
+    The caller determines what to do based on the `status`.
+    """
+    user = get_or_create_user(db_session=db_session, name=message.author.name, discord_id=message.author.id)
+    if len(message.no_prefix) == 0:
+        error_message = f"Missing location. Set with `{message.weather_prefix} -d location`"
+        return WeatherResponse(status="error", message=error_message, location="")
+    else:
+        user.weather_location = message.no_prefix
+        db_session.commit()
+        return WeatherResponse(
+            status="success",
+            message=f"Default location set to: {user.weather_location}",
+            location=user.weather_location,
+        )
+
+
+async def handle_checking_another_users_default(db_session: Session, message) -> WeatherResponse:
+    """
+    Handle checking another user's default weather location.
+
+    The caller determines what to do based on the `status`.
+    """
+    discord_id = message.no_prefix.strip("><@ ")
+    user = get_user(db_session=db_session, discord_id=discord_id)
+    if not user or user.weather_location is None:
+        return WeatherResponse(status="error", message="User has no default set", location="")
+    else:
+        return WeatherResponse(status="success", message="", location=str(user.weather_location))
+
+
+async def process_weather_command(db_session: Session, message: CustomMessage, weather_prefix: str) -> WeatherResponse:
+    message.no_prefix = message.content[len(weather_prefix) + 1 :]
+    message.weather_prefix = weather_prefix
+    weather_response = WeatherResponse(status="", message="", location="")
+
+    # Handle default locations
+    if len(message.no_prefix) == 0:
+        weather_response = await handle_users_default_location(db_session=db_session, message=message)
+    # Handle setting a default.
+    elif message.no_prefix.startswith("-d"):
+        message.no_prefix = message.no_prefix[3:].strip()
+        weather_response = await handle_user_sets_default_location(db_session=db_session, message=message)
+    # Handle checking another user's default.
+    elif message.no_prefix.startswith("<"):
+        weather_response = await handle_checking_another_users_default(db_session=db_session, message=message)
+
+    # Run the actual weather check.
+    if weather_response.status == "error":
+        return weather_response
+    elif weather_response.status == "success":
+        current_weather = await get_current_weather(db_session=db_session, location=weather_response.location)
+        weather_response.message = current_weather
+        return weather_response
+    else:
+        current_weather = await get_current_weather(db_session=db_session, location=message.no_prefix)
+        weather_response.message = current_weather
+        return weather_response

@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from typing import Final
 from unittest.mock import patch
 
@@ -7,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from errors import APISyntaxError, InvalidAPIKeyError
-from models import Coords, CoordsDB
+from models import Coords, CoordsDB, User
 from test_json_data import (
     currentweather_expected_complete,
     currentweather_expected_minimal,
@@ -15,7 +16,15 @@ from test_json_data import (
     owm_json_data_minimal,
 )
 from test_models import coords_google, coords_washington_dc, db_session
-from weather import get_coordinates_from_api, get_current_weather_from_owm, get_location_data
+from weather import (
+    WeatherResponse,
+    get_coordinates_from_api,
+    get_current_weather_from_owm,
+    get_location_data,
+    handle_checking_another_users_default,
+    handle_user_sets_default_location,
+    handle_users_default_location,
+)
 
 
 @pytest.fixture
@@ -235,3 +244,89 @@ async def test_get_current_weather_from_owm_errors(latitude: float, longitude: f
     with patch("aiohttp.ClientSession.get", new=mock_response):
         with pytest.raises(error):
             await get_current_weather_from_owm(longitude, latitude)
+
+
+@dataclass(slots=True)
+class Author:
+    """Stand-in for `discord.py`'s `Author`."""
+
+    id: int
+    name: str
+
+
+@dataclass(slots=True)
+class Message:
+    """
+    Stand-in for `discord.py`'s `message`.
+    """
+
+    author: Author
+    no_prefix: str
+    weather_prefix: str
+
+
+class TestProcessWeatherCommand:
+    author_1 = Author(id=1, name="Test User 1")
+    author_2 = Author(id=2, name="Test User 2")
+
+    @pytest.mark.asyncio
+    async def test_handle_users_default_location(self, db_session: Session) -> None:
+        """
+        When a user checks their default weather location, they get that location or
+        a message about setting a default.
+        """
+        discord_msg_1 = Message(author=self.author_1, no_prefix="", weather_prefix=".wz")
+        discord_msg_2 = Message(author=self.author_2, no_prefix="", weather_prefix=".wz")
+        py_user_with_location = User(name="Test User 1", discord_id=1, weather_location="20001")
+        py_user_no_location = User(name="Test User 2", discord_id=2, weather_location=None)
+        db_session.add(py_user_with_location)
+        db_session.add(py_user_no_location)
+        db_session.commit()
+
+        assert await handle_users_default_location(db_session, discord_msg_1) == WeatherResponse(
+            status="success", message="", location="20001"
+        )
+        assert await handle_users_default_location(db_session, discord_msg_2) == WeatherResponse(
+            status="error", message="No location set. Set with `.wz -d location`", location=""
+        )
+
+    @pytest.mark.asyncio
+    async def test_handle_user_sets_default_location(self, db_session: Session) -> None:
+        """
+        Users can set a default with `.wz -d location`, and we want to set it
+        and pass the location along for an immediate weather report.
+        """
+        discord_msg_1 = Message(author=self.author_1, no_prefix="", weather_prefix=".wz")
+        discord_msg_2 = Message(author=self.author_2, no_prefix="20001", weather_prefix=".wz")
+        py_user_1 = User(name="Test User 1", discord_id=1, weather_location=None)
+        py_user_2 = User(name="Test User 2", discord_id=2, weather_location=None)
+        db_session.add(py_user_1)
+        db_session.add(py_user_2)
+        db_session.commit()
+
+        assert await handle_user_sets_default_location(db_session, discord_msg_1) == WeatherResponse(
+            status="error", message="Missing location. Set with `.wz -d location`", location=""
+        )
+        assert await handle_user_sets_default_location(db_session, discord_msg_2) == WeatherResponse(
+            status="success", message="Default location set to: 20001", location="20001"
+        )
+
+    @pytest.mark.asyncio
+    async def test_handle_checking_another_users_default(self, db_session: Session) -> None:
+        """
+        Users can check the default locations for one another.
+        """
+        discord_msg_1 = Message(author=self.author_1, no_prefix="<@not_an_id>", weather_prefix=".wz")
+        discord_msg_2 = Message(author=self.author_2, no_prefix="<@2>", weather_prefix=".wz")
+        py_user_1 = User(name="Test User 1", discord_id=1, weather_location=None)
+        py_user_2 = User(name="Test User 2", discord_id=2, weather_location="20001")
+        db_session.add(py_user_1)
+        db_session.add(py_user_2)
+        db_session.commit()
+
+        assert await handle_checking_another_users_default(db_session, discord_msg_1) == WeatherResponse(
+            status="error", message="User has no default set", location=""
+        )
+        assert await handle_checking_another_users_default(db_session, discord_msg_2) == WeatherResponse(
+            status="success", message="", location="20001"
+        )

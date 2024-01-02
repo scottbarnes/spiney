@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Final
 
+from discord.message import Message
 from pydantic import BaseModel
 from sqlalchemy import Column, DateTime, Float, ForeignKey, Integer, String, create_engine
 from sqlalchemy.orm import Session, declarative_base, relationship, sessionmaker
@@ -42,6 +43,18 @@ class Coords:
         )
 
 
+class CustomMessage:
+    """Wrap the Discord message class with some additional attributes."""
+
+    def __init__(self, message: Message):
+        self._message = message
+        self.no_prefix: str | None = None
+        self.weather_prefix: str | None = None
+
+    def __getattr__(self, item):
+        return getattr(self._message, item)
+
+
 ##########
 # Database
 ##########
@@ -58,6 +71,10 @@ class User(Base):
     weather_location = Column(String, nullable=True)
 
     urls = relationship("Url", back_populates="user")
+
+    def set_weather_location(self, location: str) -> None:
+        """Set `self.weather_location to `location`."""
+        self.weather_location = location
 
 
 class CoordsDB(Base):
@@ -266,6 +283,14 @@ class CurrentWeather(BaseModel):
         report = ", ".join(element for element in elements if element)
 
         return report
+
+
+@dataclass(slots=True)
+class WeatherResponse:
+    """A class for holding responses for .wz when parsing the input from Discord."""
+    status: str
+    message: str
+    location: str
 
 
 ############

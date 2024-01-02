@@ -4,9 +4,9 @@ import shlex
 
 import discord
 
-from commands import get_current_weather
-from models import get_db_session
+from models import CustomMessage, get_db_session
 from url_history import add_urls_to_db, get_title_from_url, get_urls_from_line, url_search
+from weather import process_weather_command
 
 API_KEY = os.getenv("DISCORD_BOT_API_KEY", "")
 
@@ -38,9 +38,13 @@ async def on_message(message):
         await message.channel.send("Hello!")
 
     # Current weather
-    if message.content.startswith(".wz"):
-        current_weather = await get_current_weather(message.content[len(".wz") + 1 :])
-        await message.channel.send(current_weather)
+    weather_prefix = ".wz"
+    if message.content.startswith(weather_prefix):
+        custom_message = CustomMessage(message)
+        response = await process_weather_command(
+            db_session=db_session, message=custom_message, weather_prefix=weather_prefix
+        )
+        await message.channel.send(response.message)
 
     # Add to the URL history if a URL is mentioned.
     if urls := await get_urls_from_line(message.content):

@@ -2,7 +2,7 @@ from sqlalchemy.orm import Session
 
 from models import User
 from test_models import db_session
-from utilities import get_or_create_user
+from utilities import get_or_create_user, get_user
 
 
 def test_get_or_create_user(db_session: Session) -> None:
@@ -25,3 +25,16 @@ def test_get_or_create_user(db_session: Session) -> None:
     assert new_user.id == 3
     assert new_user.name == "Discord User"
     assert new_user.discord_id == 456
+
+
+def test_get_user(db_session: Session) -> None:
+    # Add an existing user
+    user = User(name="Test User", discord_id=123)
+    db_session.add(user)
+    db_session.commit()
+
+    # Retrieve the existing user.
+    existing_user = get_user(db_session=db_session, name="Test User", discord_id=123)
+    assert existing_user.discord_id == 123
+    non_existing_user = get_user(db_session=db_session, name="Not a user", discord_id=999)
+    assert non_existing_user is None

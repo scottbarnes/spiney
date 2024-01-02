@@ -22,6 +22,19 @@ def get_or_create_user(db_session: Session, name: str, discord_id: int | None = 
     return user
 
 
+def get_user(db_session: Session, name: str = "", discord_id: int | None = None) -> User | None:
+    """Get  user."""
+    if not discord_id and not name:
+        raise ValueError("Need a discord_id or name.")
+
+    user = (
+        db_session.query(User).filter(User.discord_id == discord_id).first()
+        or db_session.query(User).filter(User.name == name).first()
+    )
+
+    return user
+
+
 async def get_user_from_mention(ctx, mention):
     try:
         converter = MemberConverter()
