@@ -103,6 +103,13 @@ class TestCurrentWeather:
             json_data = {}
             CurrentWeather.create_from_owm_json(json_data)
 
+    @pytest.mark.asyncio()
+    async def test_currentweather_get_cardinal_degrees(self) -> None:
+        """
+        Check for edge cases, such as degrees = 360
+        """
+        assert CurrentWeather.get_cardinal_from_degrees(360) == "N"
+
 
 #######################################
 # General database models and relations

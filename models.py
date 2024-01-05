@@ -185,7 +185,7 @@ class CurrentWeather(BaseModel):
         result["visibility"] = json_data.get("visibility")
         result["wind_speed"] = wind_data.get("speed")
         result["wind_gust"] = wind_data.get("gust")
-        result["wind_direction"] = cls.get_cardinal_from_degrees(wind_data.get("deg")) if wind_data.get("deg") else None
+        result["wind_direction"] = CurrentWeather.get_cardinal_from_degrees(wind_data.get("deg")) if wind_data.get("deg") else None
         result["clouds"] = cloud_data.get("all")
         result["rain_last_hour"] = rain_data.get("1h")
         result["snow_last_hour"] = snow_data.get("1h")
@@ -210,8 +210,8 @@ class CurrentWeather(BaseModel):
         """
         return datetime.fromtimestamp(timestamp)
 
-    @classmethod
-    def get_cardinal_from_degrees(cls, degrees: int) -> str:
+    @staticmethod
+    def get_cardinal_from_degrees(degrees: int) -> str:
         """
         Take a degree in int and get the cardinal abbreviation.
 
@@ -219,7 +219,6 @@ class CurrentWeather(BaseModel):
         >>> "ESE"
         """
         directions = [
-            "N",
             "NNE",
             "NE",
             "ENE",
@@ -235,8 +234,9 @@ class CurrentWeather(BaseModel):
             "WNW",
             "NW",
             "NNW",
+            "N",
         ]
-        dir_index = round(degrees / (360 / len(directions)))
+        dir_index = round((degrees / (360 / len(directions)))-1)
         return directions[dir_index]
 
     def format_weather_report(self):
