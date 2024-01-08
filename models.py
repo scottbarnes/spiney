@@ -66,6 +66,7 @@ class User(Base):
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
+    created = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     discord_id = Column(Integer, unique=True)
     name = Column(String, nullable=False)
     weather_location = Column(String, nullable=True)
@@ -85,11 +86,11 @@ class CoordsDB(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     address = Column(String, nullable=False)
+    created = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     latitude = Column(Float, nullable=False)
     longitude = Column(Float, nullable=False)
+    modified = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     query = Column(String, nullable=False, index=True, unique=True)
-    created = Column(DateTime, default=datetime.now(timezone.utc))
-    modified = Column(DateTime, default=datetime.now(timezone.utc), onupdate=datetime.now(timezone.utc))
 
     def to_dataclass(self) -> Coords:
         """
@@ -113,7 +114,7 @@ class Url(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(Integer, ForeignKey("users.id"))
-    created = Column(DateTime, default=datetime.now(timezone.utc))
+    created = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     url = Column(String, nullable=False)
     title = Column(String)
 
@@ -129,7 +130,7 @@ class Attachment(Base):
     __tablename__ = "attachments"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    created = Column(DateTime, default=datetime.now(timezone.utc))
+    created = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     discord_filename = Column(String, nullable=False)
     discord_id = Column(String, nullable=False)
     emoji = Column(String)
