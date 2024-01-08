@@ -48,6 +48,8 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
       - DB_URI=sqlite:////app/data/bot.sqlite
+    env_file:
+      - .env
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.gmattach-nginx-rtr.tls=true"
