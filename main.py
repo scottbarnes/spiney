@@ -5,10 +5,12 @@ import shlex
 import discord
 
 from models import CustomMessage, get_db_session
+from save_attachments import save_attachment
 from url_history import add_urls_to_db, get_title_from_url, get_urls_from_line, url_search
 from weather import process_weather_command
 
 API_KEY = os.getenv("DISCORD_BOT_API_KEY", "")
+FILE_DIR = os.getenv("FILE_DIR", "")
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -30,12 +32,6 @@ async def on_message(message):
     # Debug line content
     if message:
         print(f"new message: {message}")
-        print(f"new message content: {message.content}")
-        print(f"new message author id: {message.author.id}")
-
-    if message.content.startswith("$hello"):
-        print(f"message: {message}")
-        await message.channel.send("Hello!")
 
     # Current weather
     weather_prefix = ".wz"
@@ -74,6 +70,17 @@ async def on_message(message):
             await message.channel.send("".join(url for url in formatted_urls))
 
         return None
+
+
+@client.event
+async def on_raw_reaction_add(payload):
+    if str(payload.emoji) == "💾":
+        await save_attachment(db_session=db_session, client=client, payload=payload, save_location=FILE_DIR)
+
+
+@client.event
+async def on_raw_reaction_remove(payload):
+    print(f"reaction removed: {payload}")
 
 
 if __name__ == "__main__":

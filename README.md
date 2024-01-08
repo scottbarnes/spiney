@@ -21,7 +21,7 @@ To do this within the Docker containers (e.g. because the deployment is elsewher
 $ git pull origin main       # Get the new changes
 $ cp data/bot.sqlite{,.bak}  # Back up the DB.
 $ docker compose build
-$ docker compose run discord bot elembic upgrade head
+$ docker compose run discordbot elembic upgrade head
 ```
 
 Ideally the output will be something like:

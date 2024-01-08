@@ -2,7 +2,9 @@ from sqlalchemy.orm import Session
 
 from models import User
 from test_models import db_session
-from utilities import get_or_create_user, get_user
+from utilities import get_or_create_user, get_unique_filename, get_user
+
+import pytest
 
 
 def test_get_or_create_user(db_session: Session) -> None:
@@ -38,3 +40,15 @@ def test_get_user(db_session: Session) -> None:
     assert existing_user.discord_id == 123
     non_existing_user = get_user(db_session=db_session, name="Not a user", discord_id=999)
     assert non_existing_user is None
+
+
+@pytest.mark.asyncio()
+async def test_get_unique_filename() -> None:
+    """Basic test to ensure get_unique_filename() isn't obviously broken."""
+    filename = "file.txt"
+    got_one = await get_unique_filename(filename)
+    got_two = await get_unique_filename(filename)
+    got_three = await get_unique_filename(filename)
+    assert got_one != got_two
+    assert got_two != got_three
+    assert got_one != got_three

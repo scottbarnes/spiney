@@ -9,6 +9,7 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
       - DB_URI=sqlite:////app/data/bot.sqlite
+      - FILE_DIR=/app/data/attachments
     env_file:
       - .env
     volumes:

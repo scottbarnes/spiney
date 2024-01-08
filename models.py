@@ -70,6 +70,7 @@ class User(Base):
     name = Column(String, nullable=False)
     weather_location = Column(String, nullable=True)
 
+    attachments = relationship("Attachment", back_populates="user")
     urls = relationship("Url", back_populates="user")
 
     def set_weather_location(self, location: str) -> None:
@@ -106,7 +107,7 @@ class CoordsDB(Base):
 
 
 class Url(Base):
-    """SQLAlchemy representation of the A URL"""
+    """SQLAlchemy representation of a Discord URL."""
 
     __tablename__ = "urls"
 
@@ -120,6 +121,26 @@ class Url(Base):
 
     def __str__(self):
         return f"Url(id={self.id}, user='{self.user}', url='{self.url}', title='{self.title}')"
+
+
+class Attachment(Base):
+    """SQLAlchemy representation of a Discord attachment."""
+
+    __tablename__ = "attachments"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    created = Column(DateTime, default=datetime.now(timezone.utc))
+    discord_filename = Column(String, nullable=False)
+    discord_id = Column(String, nullable=False)
+    emoji = Column(String)
+    filename = Column(String, nullable=False)
+    url = Column(String, nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"))
+
+    user = relationship("User", back_populates="attachments")
+
+    def __str__(self):
+        return f"Attachment(id={self.id}, user='{self.user}', filename='{self.filename}')"
 
 
 #########
@@ -185,7 +206,9 @@ class CurrentWeather(BaseModel):
         result["visibility"] = json_data.get("visibility")
         result["wind_speed"] = wind_data.get("speed")
         result["wind_gust"] = wind_data.get("gust")
-        result["wind_direction"] = CurrentWeather.get_cardinal_from_degrees(wind_data.get("deg")) if wind_data.get("deg") else None
+        result["wind_direction"] = (
+            CurrentWeather.get_cardinal_from_degrees(wind_data.get("deg")) if wind_data.get("deg") else None
+        )
         result["clouds"] = cloud_data.get("all")
         result["rain_last_hour"] = rain_data.get("1h")
         result["snow_last_hour"] = snow_data.get("1h")
@@ -236,7 +259,7 @@ class CurrentWeather(BaseModel):
             "NNW",
             "N",
         ]
-        dir_index = round((degrees / (360 / len(directions)))-1)
+        dir_index = round((degrees / (360 / len(directions))) - 1)
         return directions[dir_index]
 
     def format_weather_report(self):
@@ -288,6 +311,7 @@ class CurrentWeather(BaseModel):
 @dataclass(slots=True)
 class WeatherResponse:
     """A class for holding responses for .wz when parsing the input from Discord."""
+
     status: str
     message: str
     location: str
