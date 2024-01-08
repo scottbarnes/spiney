@@ -33,6 +33,29 @@ services:
       - "traefik.http.routers.backlink-rtr.service=backlink-svc"
       - "traefik.http.services.backlink-svc.loadbalancer.server.port=8080"
 
+  attachments:
+    restart: unless-stopped
+    build:
+      context: ./frontend_attachments
+      dockerfile: Dockerfile
+    # ports:
+    #   - 3006:80
+    networks:
+      - t2_proxy
+    volumes:
+      - ./frontend_attachments:/app
+      - ./data:/app/data
+    environment:
+      - PYTHONUNBUFFERED=1
+      - DB_URI=sqlite:////app/data/bot.sqlite
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.gmattach-nginx-rtr.tls=true"
+      - "traefik.http.routers.gmattach-nginx-rtr.entrypoints=https"
+      - "traefik.http.routers.gmattach-nginx-rtr.rule=Host(`gm-art.hope.fishcracker.net`)"
+      - "traefik.http.routers.gmattach-nginx-rtr.service=gmattach-nginx-svc"
+      - "traefik.http.services.gmattach-nginx-svc.loadbalancer.server.port=80"
+
 networks:
   t2_proxy:
     name: t2_proxy
