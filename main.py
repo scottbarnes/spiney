@@ -7,7 +7,7 @@ import discord
 from models import CustomMessage, get_db_session
 from save_attachments import save_attachment
 from url_history import add_urls_to_db, get_title_from_url, get_urls_from_line, url_search
-from weather import process_weather_command
+from weather import process_weather_command, WEATHER_PREFIX, FORECAST_PREFIX
 
 API_KEY = os.getenv("DISCORD_BOT_API_KEY", "")
 FILE_DIR = os.getenv("FILE_DIR", "")
@@ -34,11 +34,15 @@ async def on_message(message):
         print(f"new message: {message}")
 
     # Current weather
-    weather_prefix = ".wz"
-    if message.content.startswith(weather_prefix):
+    prefix = ""
+    if message.content.startswith(WEATHER_PREFIX):
+        prefix = WEATHER_PREFIX
+    elif message.content.startswith(FORECAST_PREFIX):
+        prefix = FORECAST_PREFIX
+    if prefix:
         custom_message = CustomMessage(message)
         response = await process_weather_command(
-            db_session=db_session, message=custom_message, weather_prefix=weather_prefix
+            db_session=db_session, message=custom_message, weather_prefix=prefix
         )
         await message.channel.send(response.message)
 

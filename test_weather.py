@@ -1,17 +1,23 @@
 from dataclasses import dataclass
+from datetime import datetime, timezone, timedelta
 from typing import Final
 from unittest.mock import patch
 
 import aiohttp
 import pytest
+
+from freezegun import freeze_time
+from freezegun.api import FakeDatetime
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from errors import APISyntaxError, InvalidAPIKeyError
-from models import Coords, CoordsDB, User
+from models import Coords, CoordsDB, ForecastPeriod, ForecastWeather, Grid, User
 from test_json_data import (
     currentweather_expected_complete,
     currentweather_expected_minimal,
+    forecast_weather_grid_response,
+    forecast_weather_grid_seven_day,
     owm_json_data_complete,
     owm_json_data_minimal,
 )
@@ -20,7 +26,9 @@ from weather import (
     WeatherResponse,
     get_coordinates_from_api,
     get_current_weather_from_owm,
+    get_forecast_from_nws,
     get_location_data,
+    get_nws_grid_from_coordinates,
     handle_checking_another_users_default,
     handle_user_sets_default_location,
     handle_users_default_location,
@@ -330,3 +338,121 @@ class TestProcessWeatherCommand:
         assert await handle_checking_another_users_default(db_session, discord_msg_2) == WeatherResponse(
             status="success", message="", location="20001"
         )
+
+
+@pytest.mark.asyncio()
+@pytest.mark.parametrize(
+    ("coords", "expected", "mock_response"),
+    [
+        (
+            Coords(latitude=39.7456, longitude=-97.0892, address="test", query="test"),
+            Grid(grid_id="TOP", grid_x=32, grid_y=81),
+            forecast_weather_grid_response,
+        ),
+    ],
+    indirect=["mock_response"],
+)
+async def test_get_nws_grid_from_coordinates(coords, expected, mock_response) -> None:
+    """
+    Verify it's possible to get an NWS grid from Coords (with just latitude and longitude).
+    """
+    with patch("aiohttp.ClientSession.get", new=mock_response):
+        got = await get_nws_grid_from_coordinates(coordinates=coords)
+        assert got == expected
+
+
+# Used in the next test.
+parsed_forecast = ForecastWeather(
+    elevation=441.96,
+    updateTime=FakeDatetime(2024, 1, 15, 23, 27, 23, tzinfo=timezone.utc),
+    forecastPeriods=[
+        ForecastPeriod(
+            name="Tonight",
+            startTime=FakeDatetime(2024, 1, 15, 21, 0, tzinfo=timezone(timedelta(days=-1, seconds=64800))),
+            endTime=FakeDatetime(2024, 1, 16, 6, 0, tzinfo=timezone(timedelta(days=-1, seconds=64800))),
+            probabilityOfPrecipitation=None,
+            windSpeed="10 mph",
+            windDirection="W",
+            icon="https://api.weather.gov/icons/land/night/cold?size=medium",
+            shortForecast="Clear",
+            detailedForecast="Clear, with a low around -12. Wind chill values as low as -29. West wind around 10 mph, with gusts as high as 20 mph.",
+        ),
+        ForecastPeriod(
+            name="Tuesday",
+            startTime=FakeDatetime(2024, 1, 16, 6, 0, tzinfo=timezone(timedelta(days=-1, seconds=64800))),
+            endTime=FakeDatetime(2024, 1, 16, 18, 0, tzinfo=timezone(timedelta(days=-1, seconds=64800))),
+            probabilityOfPrecipitation=None,
+            windSpeed="10 to 15 mph",
+            windDirection="W",
+            icon="https://api.weather.gov/icons/land/day/skc?size=medium",
+            shortForecast="Sunny",
+            detailedForecast="Sunny, with a high near 12. Wind chill values as low as -31. West wind 10 to 15 mph, with gusts as high as 20 mph.",
+        ),
+        ForecastPeriod(
+            name="Tuesday Night",
+            startTime=FakeDatetime(2024, 1, 16, 18, 0, tzinfo=timezone(timedelta(days=-1, seconds=64800))),
+            endTime=FakeDatetime(2024, 1, 17, 6, 0, tzinfo=timezone(timedelta(days=-1, seconds=64800))),
+            probabilityOfPrecipitation=None,
+            windSpeed="10 to 15 mph",
+            windDirection="SW",
+            icon="https://api.weather.gov/icons/land/night/cold?size=medium",
+            shortForecast="Mostly Clear",
+            detailedForecast="Mostly clear, with a low around 3. Wind chill values as low as -11. Southwest wind 10 to 15 mph, with gusts as high as 20 mph.",
+        ),
+        ForecastPeriod(
+            name="Wednesday",
+            startTime=FakeDatetime(2024, 1, 17, 6, 0, tzinfo=timezone(timedelta(days=-1, seconds=64800))),
+            endTime=FakeDatetime(2024, 1, 17, 18, 0, tzinfo=timezone(timedelta(days=-1, seconds=64800))),
+            probabilityOfPrecipitation=None,
+            windSpeed="5 to 10 mph",
+            windDirection="S",
+            icon="https://api.weather.gov/icons/land/day/sct?size=medium",
+            shortForecast="Mostly Sunny",
+            detailedForecast="Mostly sunny, with a high near 26. Wind chill values as low as -3. South wind 5 to 10 mph.",
+        ),
+        ForecastPeriod(
+            name="Wednesday Night",
+            startTime=FakeDatetime(2024, 1, 17, 18, 0, tzinfo=timezone(timedelta(days=-1, seconds=64800))),
+            endTime=FakeDatetime(2024, 1, 18, 6, 0, tzinfo=timezone(timedelta(days=-1, seconds=64800))),
+            probabilityOfPrecipitation=None,
+            windSpeed="5 to 10 mph",
+            windDirection="NE",
+            icon="https://api.weather.gov/icons/land/night/cold?size=medium",
+            shortForecast="Mostly Cloudy",
+            detailedForecast="Mostly cloudy, with a low around 9. Northeast wind 5 to 10 mph.",
+        ),
+        ForecastPeriod(
+            name="Thursday",
+            startTime=FakeDatetime(2024, 1, 18, 6, 0, tzinfo=timezone(timedelta(days=-1, seconds=64800))),
+            endTime=FakeDatetime(2024, 1, 18, 18, 0, tzinfo=timezone(timedelta(days=-1, seconds=64800))),
+            probabilityOfPrecipitation=20,
+            windSpeed="10 mph",
+            windDirection="N",
+            icon="https://api.weather.gov/icons/land/day/bkn/snow,20?size=medium",
+            shortForecast="Partly Sunny then Slight Chance Light Snow",
+            detailedForecast="A slight chance of snow after noon. Partly sunny, with a high near 17. North wind around 10 mph. Chance of precipitation is 20%. Little or no snow accumulation expected.",
+        ),
+    ],
+)
+
+
+@freeze_time("2024-1-15 20:00:00", tz_offset=-8)
+@pytest.mark.asyncio()
+@pytest.mark.parametrize(
+    ("grid", "expected", "mock_response"),
+    [
+        (
+            Grid(grid_id="TOP", grid_x=32, grid_y=81),
+            parsed_forecast,
+            forecast_weather_grid_seven_day,
+        ),
+    ],
+    indirect=["mock_response"],
+)
+async def test_get_forecast_from_nws(grid, expected, mock_response) -> None:
+    """
+    Fetching and loading the forecast frome the NWS works.
+    """
+    with patch("aiohttp.ClientSession.get", new=mock_response):
+        got = await get_forecast_from_nws(grid=grid)
+        assert got == expected

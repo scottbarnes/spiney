@@ -8,11 +8,14 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from errors import APISyntaxError, InvalidAPIKeyError
-from models import Coords, CoordsDB, CurrentWeather, CustomMessage, WeatherResponse
+from models import Coords, CoordsDB, CurrentWeather, CustomMessage, ForecastWeather, Grid, WeatherResponse
 from utilities import get_or_create_user, get_user
 
 GOOGLE_MAPS_API_KEY: Final = os.getenv("GOOGLE_MAPS_API_KEY", "")
 OPENWEATHER_API_KEY: Final = os.getenv("OPENWEATHER_API_KEY", "")
+
+WEATHER_PREFIX = ".wz"
+FORECAST_PREFIX = ".wf"
 
 
 async def get_coordinates_from_api(location: str) -> Coords | None:
@@ -42,6 +45,28 @@ async def get_coordinates_from_api(location: str) -> Coords | None:
                 raise ValueError(f"Got unexpected result from get_coordinates_from_api(): {result}")
 
 
+async def get_nws_grid_from_coordinates(coordinates: Coords) -> Grid:
+    """
+    Get the NWS forecast grid (12 hour period over the next seven days from coordinates.
+
+    See, e.g: https://api.weather.gov/points/39.7456,-97.0892
+    """
+    url = f"https://api.weather.gov/points/{coordinates.latitude},{coordinates.longitude}"
+
+    async with aiohttp.ClientSession() as session:
+        response = await session.get(url)
+        result = await response.json()
+        properties = result.get("properties")
+        if not properties:
+            raise ValueError(f"Missing properties in NWS weather grid: {result}")
+
+        grid_id = properties.get("gridId")
+        grid_x = properties.get("gridX")
+        grid_y = properties.get("gridY")
+
+        return Grid(grid_id=grid_id, grid_x=grid_x, grid_y=grid_y)
+
+
 async def get_location_data(address: str, db_session: Session) -> Coords | None:
     """
     Turn an address into Coords, if geocoded coordinates can be found.
@@ -61,6 +86,18 @@ async def get_location_data(address: str, db_session: Session) -> Coords | None:
         return coordinates
 
     return None
+
+
+async def get_forecast_from_nws(grid: Grid) -> ForecastWeather:
+    """
+    Based `grid`, get a ~3 day weather forecast from the NWS.
+    """
+    url = f"https://api.weather.gov/gridpoints/{grid.grid_id}/{grid.grid_x},{grid.grid_y}/forecast"
+    async with aiohttp.ClientSession() as session:
+        response = await session.get(url)
+        result = await response.json()
+
+        return ForecastWeather.create_from_json(result)
 
 
 async def get_current_weather_from_owm(latitude: float, longitude: float) -> CurrentWeather:
@@ -96,6 +133,18 @@ async def get_current_weather(db_session: Session, location: str) -> str:
 
     current_weather = await get_current_weather_from_owm(coordinates.latitude, coordinates.longitude)
     return current_weather.format_weather_report()
+
+
+async def get_current_forecast(db_session: Session, location: str) -> str:
+    """
+    Geocode `location` to GPS coordinates and return a report of the current forecast.
+    """
+    if not (coordinates := await get_location_data(address=location, db_session=db_session)):
+        return f"Could not geocode input: {location}"
+
+    grid = await get_nws_grid_from_coordinates(coordinates=coordinates)
+    current_forecast = await get_forecast_from_nws(grid=grid)
+    return current_forecast.format_forecast_report()
 
 
 async def handle_users_default_location(db_session: Session, message: Message) -> WeatherResponse:
@@ -150,6 +199,12 @@ async def handle_checking_another_users_default(db_session: Session, message) ->
 
 
 async def process_weather_command(db_session: Session, message: CustomMessage, weather_prefix: str) -> WeatherResponse:
+    """
+    Handle weather calls with `WEATHER_PREFIX` and `FORECAST_PREFIX`.
+
+    Here, the prefix (i.e. `wz` or `.wf`) is stripped and the remaining content
+    (e.g. `-d 20001`) is saved in `message_no_prefix`.
+    """
     message.no_prefix = message.content[len(weather_prefix) + 1 :]
     message.weather_prefix = weather_prefix
     weather_response = WeatherResponse(status="", message="", location="")
@@ -168,11 +223,18 @@ async def process_weather_command(db_session: Session, message: CustomMessage, w
     # Run the actual weather check.
     if weather_response.status == "error":
         return weather_response
+    # Checking one's/another user's weather location.
     elif weather_response.status == "success":
-        current_weather = await get_current_weather(db_session=db_session, location=weather_response.location)
-        weather_response.message = current_weather
+        weather = (
+            await get_current_weather(db_session=db_session, location=weather_response.location)
+            if message.weather_prefix == WEATHER_PREFIX
+            else f"Forecast for: {weather_response.location}. "
+            + await get_current_forecast(db_session=db_session, location=weather_response.location)
+        )
+        weather_response.message = weather
         return weather_response
     else:
-        current_weather = await get_current_weather(db_session=db_session, location=message.no_prefix)
-        weather_response.message = current_weather
+        print(f"in else: {message.no_prefix}")
+        weather = await get_current_weather(db_session=db_session, location=message.no_prefix)
+        weather_response.message = weather
         return weather_response

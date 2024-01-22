@@ -1,6 +1,6 @@
 import os
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Final
 
 from discord.message import Message
@@ -263,7 +263,7 @@ class CurrentWeather(BaseModel):
         dir_index = round((degrees / (360 / len(directions))) - 1)
         return directions[dir_index]
 
-    def format_weather_report(self):
+    def format_weather_report(self) -> str:
         """
         Create a formatted weather report.
         """
@@ -307,6 +307,139 @@ class CurrentWeather(BaseModel):
         report = ", ".join(element for element in elements if element)
 
         return report
+
+
+@dataclass(slots=True)
+class Grid:
+    """
+    Representation of an NWS weather grid.
+
+    See, e.g.: https://api.weather.gov/points/39.7456,-97.0892
+    """
+
+    grid_id: str
+    grid_x: int
+    grid_y: int
+
+
+class ForecastPeriod(BaseModel):
+    name: str
+    startTime: datetime
+    endTime: datetime
+    probabilityOfPrecipitation: int | None
+    windSpeed: str
+    windDirection: str
+    icon: str
+    shortForecast: str
+    detailedForecast: str
+
+
+class ForecastWeather(BaseModel):
+    elevation: float
+    updateTime: datetime
+    forecastPeriods: list[ForecastPeriod]
+
+    @classmethod
+    def create_from_json(cls, json_data) -> "ForecastWeather":
+        elevation_data = json_data["properties"]["elevation"]
+        update_time = json_data["properties"]["updateTime"]
+        periods_data = json_data["properties"]["periods"]
+        now = datetime.now(tz=timezone(timedelta(days=-1, seconds=64800)))
+
+        # Parse each period into a ForecastPeriod model (next ~3 days only).
+        periods = [
+            ForecastPeriod(
+                name=period["name"],
+                startTime=datetime.fromisoformat(period["startTime"]),
+                endTime=datetime.fromisoformat(period["endTime"]),
+                probabilityOfPrecipitation=period["probabilityOfPrecipitation"]["value"],
+                windSpeed=period["windSpeed"],
+                windDirection=period["windDirection"],
+                icon=period["icon"],
+                shortForecast=period["shortForecast"],
+                detailedForecast=period["detailedForecast"],
+            )
+            for period in periods_data
+            if datetime.fromisoformat(period["startTime"]) - now <= timedelta(days=3)
+        ]
+
+        return cls(
+            elevation=elevation_data["value"], updateTime=datetime.fromisoformat(update_time), forecastPeriods=periods
+        )
+
+    def format_forecast_report(self) -> str:
+        """
+        Create a formatted forecast weather report.
+        """
+
+        def mph_to_kph(mph):
+            return mph * 1.60934
+
+        def fahrenheit_to_celsius(f):
+            return (f - 32) * 5.0 / 9.0
+
+        def extract_and_convert_temperature(details):
+            # Assuming temperature is mentioned in Fahrenheit in the details
+            temp_f = extract_temperature_in_fahrenheit(details)
+            if temp_f is not None:
+                temp_c = fahrenheit_to_celsius(temp_f)
+                return f"{temp_c:.1f}°C ({temp_f:.1f}°F)"
+            return ""
+
+        def extract_temperature_in_fahrenheit(details):
+            # Implement a method to extract the temperature in Fahrenheit from the details string
+            pass
+
+        def extract_wind_speed_in_mph(wind_speed_str):
+            # Assuming wind speed is in the format '10 mph' or '5 to 10 mph'
+            # Extract and return the average wind speed in mph
+            pass
+
+        report_lines = [
+            f"Forecast at Elevation: {self.elevation:.2f} meters. Last Updated: {self.updateTime.strftime('%a %b %d %H:%M:%S %Z')}"
+            if self.updateTime
+            else "",
+        ]
+
+        for period in self.forecastPeriods:
+            wind_speed_mph = extract_wind_speed_in_mph(period.windSpeed)
+            wind_speed_kph = mph_to_kph(wind_speed_mph)
+            temperature = extract_and_convert_temperature(period.detailedForecast)
+
+            period_details = [
+                f"**{period.name}**",
+                f"Probability of Precipitation: {period.probabilityOfPrecipitation}%"
+                if period.probabilityOfPrecipitation is not None
+                else "",
+                f"Wind: {period.windSpeed} from the {period.windDirection}",
+                f"Details: {period.detailedForecast}",
+            ]
+            report_lines.append(", ".join(detail for detail in period_details if detail))
+
+        return "\n".join(report_lines)
+
+    def format_forecast_report(self) -> str:
+        """
+        Create a formatted forecast weather report.
+        """
+        report_lines = [
+            f"Forecast at Elevation: {self.elevation:.2f} meters. Last Updated: {self.updateTime.strftime('%a %b %d %H:%M:%S %Z')}"
+            if self.updateTime
+            else "",
+        ]
+
+        for period in self.forecastPeriods:
+            period_details = [
+                f"**{period.name}**",
+                f"Probability of Precipitation: {period.probabilityOfPrecipitation}%"
+                if period.probabilityOfPrecipitation is not None
+                else "",
+                f"Wind: {period.windSpeed} from the {period.windDirection}",
+                f"Details: {period.detailedForecast}",
+            ]
+            report_lines.append(", ".join(detail for detail in period_details if detail))
+
+        return "\n".join(report_lines)
 
 
 @dataclass(slots=True)
