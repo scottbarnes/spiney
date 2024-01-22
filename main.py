@@ -12,6 +12,9 @@ from weather import process_weather_command, WEATHER_PREFIX, FORECAST_PREFIX
 API_KEY = os.getenv("DISCORD_BOT_API_KEY", "")
 FILE_DIR = os.getenv("FILE_DIR", "")
 
+WEATHER_PREFIX = ".wz"
+FORECAST_PREFIX = ".wf"
+
 intents = discord.Intents.default()
 intents.message_content = True
 
