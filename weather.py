@@ -203,7 +203,7 @@ async def process_weather_command(db_session: Session, message: CustomMessage, w
     Handle weather calls with `WEATHER_PREFIX` and `FORECAST_PREFIX`.
 
     Here, the prefix (i.e. `wz` or `.wf`) is stripped and the remaining content
-    (e.g. `-d 20001`) is saved in `message_no_prefix`.
+    (e.g. `-d 20001`) is saved in `message.no_prefix`.
     """
     message.no_prefix = message.content[len(weather_prefix) + 1 :]
     message.weather_prefix = weather_prefix
