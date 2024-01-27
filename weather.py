@@ -233,8 +233,14 @@ async def process_weather_command(db_session: Session, message: CustomMessage, w
         )
         weather_response.message = weather
         return weather_response
+    # Checking an arbitrary weather location.
     else:
         print(f"in else: {message.no_prefix}")
-        weather = await get_current_weather(db_session=db_session, location=message.no_prefix)
+        weather = (
+            await get_current_weather(db_session=db_session, location=message.no_prefix)
+            if message.weather_prefix == WEATHER_PREFIX
+            else f"Forecast for: {message.no_prefix}. "
+            + await get_current_forecast(db_session=db_session, location=message.no_prefix)
+        )
         weather_response.message = weather
         return weather_response
