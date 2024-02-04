@@ -360,7 +360,7 @@ class ForecastWeather(BaseModel):
                 detailedForecast=period["detailedForecast"],
             )
             for period in periods_data
-            if datetime.fromisoformat(period["startTime"]) - now <= timedelta(days=3)
+            if datetime.fromisoformat(period["startTime"]) - now <= timedelta(days=2)
         ]
 
         return cls(
