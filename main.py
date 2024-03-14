@@ -7,6 +7,7 @@ import discord
 from models import CustomMessage, get_db_session
 from save_attachments import save_attachment
 from url_history import add_urls_to_db, get_title_from_url, get_urls_from_line, url_search
+from utilities import chunk_string
 from weather import process_weather_command, WEATHER_PREFIX, FORECAST_PREFIX
 
 API_KEY = os.getenv("DISCORD_BOT_API_KEY", "")
@@ -44,10 +45,10 @@ async def on_message(message):
         prefix = FORECAST_PREFIX
     if prefix:
         custom_message = CustomMessage(message)
-        response = await process_weather_command(
-            db_session=db_session, message=custom_message, weather_prefix=prefix
-        )
-        await message.channel.send(response.message)
+        response = await process_weather_command(db_session=db_session, message=custom_message, weather_prefix=prefix)
+        message_chunks = chunk_string(string=response.message, length=1900, acc=[])
+        for chunk in message_chunks:
+            await message.channel.send(chunk)
 
     # Add to the URL history if a URL is mentioned.
     if urls := await get_urls_from_line(message.content):

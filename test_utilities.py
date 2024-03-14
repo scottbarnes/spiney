@@ -2,7 +2,7 @@ from sqlalchemy.orm import Session
 
 from models import User
 from test_models import db_session
-from utilities import get_or_create_user, get_unique_filename, get_user
+from utilities import chunk_string, get_or_create_user, get_unique_filename, get_user
 
 import pytest
 
@@ -52,3 +52,18 @@ async def test_get_unique_filename() -> None:
     assert got_one != got_two
     assert got_two != got_three
     assert got_one != got_three
+
+
+@pytest.mark.asyncio()
+@pytest.mark.parametrize(
+    ["string", "length", "expected"],
+    [
+        ("a", 5, ["a"]),
+        ("a", 1, ["a"]),
+        ("a" * 3, 2, ["aa", "a"]),
+        ("a" * 6, 2, ["aa", "aa", "aa"]),
+    ],
+)
+def test_chunk_string(string, length, expected) -> None:
+    got = chunk_string(string, length, acc=[])
+    assert got == expected

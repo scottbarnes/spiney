@@ -87,3 +87,13 @@ async def download_file(url: str, filepath: str) -> None:
                     if not chunk:
                         break
                     f.write(chunk)
+
+
+def chunk_string(string: str, length: int, acc: list[str]) -> list[str]:
+    """Split `s` into a list of str of size `length`."""
+    if not string:
+        return acc
+
+    acc.append(string[:length])
+
+    return chunk_string(string[length:], length=length, acc=acc)
