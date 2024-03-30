@@ -335,13 +335,13 @@ class ForecastPeriod(BaseModel):
 
 
 class ForecastWeather(BaseModel):
-    elevation: float
+    elevation: float | None
     updateTime: datetime
     forecastPeriods: list[ForecastPeriod]
 
     @classmethod
     def create_from_json(cls, json_data) -> "ForecastWeather":
-        elevation_data = json_data["properties"]["elevation"]
+        elevation_data = json_data["properties"].get("elevation", [])
         update_time = json_data["properties"]["updateTime"]
         periods_data = json_data["properties"]["periods"]
         now = datetime.now(tz=timezone(timedelta(days=-1, seconds=64800)))
@@ -364,7 +364,7 @@ class ForecastWeather(BaseModel):
         ]
 
         return cls(
-            elevation=elevation_data["value"], updateTime=datetime.fromisoformat(update_time), forecastPeriods=periods
+            elevation=elevation_data.get("value"), updateTime=datetime.fromisoformat(update_time), forecastPeriods=periods
         )
 
     def format_forecast_report(self) -> str:
