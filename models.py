@@ -73,6 +73,8 @@ class User(Base):
 
     attachments = relationship("Attachment", back_populates="user")
     urls = relationship("Url", back_populates="user")
+    last_seen = Column(DateTime, nullable=True)
+    last_line = Column(String, nullable=True)
 
     def set_weather_location(self, location: str) -> None:
         """Set `self.weather_location to `location`."""

@@ -4,6 +4,7 @@ import shlex
 
 import discord
 
+from last_seen import check_for_last_seen_info, update_last_seen, get_last_seen, LAST_SEEN_PREFIX
 from models import CustomMessage, get_db_session
 from save_attachments import save_attachment
 from url_history import add_urls_to_db, get_title_from_url, get_urls_from_line, url_search
@@ -13,8 +14,6 @@ from weather import process_weather_command, WEATHER_PREFIX, FORECAST_PREFIX
 API_KEY = os.getenv("DISCORD_BOT_API_KEY", "")
 FILE_DIR = os.getenv("FILE_DIR", "")
 
-WEATHER_PREFIX = ".wz"
-FORECAST_PREFIX = ".wf"
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -36,6 +35,9 @@ async def on_message(message):
     # Debug line content
     if message:
         print(f"new message: {message}")
+
+    # Set last seen
+    await update_last_seen(db_session=db_session, discord_user=message.author, message=message.content)
 
     # Current weather
     prefix = ""
@@ -78,6 +80,10 @@ async def on_message(message):
             await message.channel.send("".join(url for url in formatted_urls))
 
         return None
+
+    # Get last seen
+    if last_seen_info := await check_for_last_seen_info(db_session=db_session, message=message):
+        await message.channel.send(last_seen_info)
 
 
 @client.event
