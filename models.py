@@ -462,3 +462,14 @@ class WeatherResponse:
 class UrlTitle:
     url: str
     title: str
+
+
+############
+# Quote DB
+############
+
+
+class Quote(Base):
+    """SQLAlchemy representation of a quote."""
+    # Basing this on the Url class above might be a good start.
+    pass
