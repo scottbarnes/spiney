@@ -469,7 +469,7 @@ class UrlTitle:
 ############
 
 
-class Quote(Base):
-    """SQLAlchemy representation of a quote."""
-    # Basing this on the Url class above might be a good start.
-    pass
+# class Quote(Base):
+#     """SQLAlchemy representation of a quote."""
+#     # Basing this on the Url class above might be a good start.
+#     pass
